@@ -17,7 +17,8 @@ A Gradio UI and JSON API for public bug bounty program listings and scope.
 - Space: https://huggingface.co/spaces/wuhp/bbconnectapi
 - Source: https://github.com/Wuhpondiscord/bbcollect
 - HackerOne: live public GraphQL requests initialized from https://hackerone.com/opportunities/all, with explicit dataset fallback.
-- Bugcrowd, Intigriti, YesWeHack: public snapshots from [arkadiyt/bounty-targets-data](https://github.com/arkadiyt/bounty-targets-data).
+- Bugcrowd, Intigriti, YesWeHack directories: public snapshots from [arkadiyt/bounty-targets-data](https://github.com/arkadiyt/bounty-targets-data).
+- All four platforms: live program details, reward ranges/tables, scopes, exclusions and full program rules.
 
 This collects the public open-program directory, not every promotion or feature of the Opportunities page. Private programs and authenticated account data are not collected. No platform credentials are required.
 
@@ -30,7 +31,7 @@ from gradio_client import Client
 client = Client("wuhp/bbconnectapi")
 page = client.predict(
     platforms=["hackerone", "bugcrowd", "intigriti", "yeswehack"],
-    search="", bounty_only=False, limit=100, offset=0,
+    search="", bounty_only=False, limit=10, offset=0, include_details=True,
     api_name="/collect",
 )
 print(page["programs"])
@@ -39,6 +40,8 @@ scope = client.predict(platform="hackerone", handle="security", api_name="/scope
 print(scope["targets"]["in_scope"])
 print(scope["targets"]["out_of_scope"])
 print(client.predict(api_name="/sources"))
+details = client.predict(platform="bugcrowd", handle="CCData-mbb-og", api_name="/details")
+print(details["min_bounty"], details["max_bounty"], details["rules"])
 ```
 
 Raw HTTP uses Gradio's two-step event API, not REST GET routes:
@@ -46,16 +49,20 @@ Raw HTTP uses Gradio's two-step event API, not REST GET routes:
 ```bash
 curl -X POST https://wuhp-bbconnectapi.hf.space/gradio_api/call/collect \
   -H 'Content-Type: application/json' \
-  -d '{"data":[["hackerone"],"",false,100,0]}'
+  -d '{"data":[["hackerone"],"",false,10,0,true]}'
 # Use the returned event_id:
 curl -N https://wuhp-bbconnectapi.hf.space/gradio_api/call/collect/EVENT_ID
 ```
 
-`/collect` returns `ok`, `partial`, `total` (after filtering), `next_offset`, `sources`, and `programs`. Failures are reported per source; an empty successful search differs from an upstream failure. Sorting is by platform, name, then ID. `limit` is 1–1000; `offset` is 0–100000. Search matches name, handle, URL or website. The bounty filter excludes unknown values.
+`/collect` returns `ok`, `partial`, `total` (after filtering), `next_offset`, `sources`, and `programs`. It includes live details by default: each program has `targets`, `rules`, `reward_table`, `field_status`, and `details_source`. Set `include_details=False` for fast summary pages. Full-detail pages support 1–100 programs; summary pages support 1–1000. `offset` is 0–100000. Four workers fetch details with a shared 15-minute cache, so large first requests take longer.
 
-Program fields: `id`, `platform`, `handle`, `name`, `url`, `website`, `offers_bounties`, `min_bounty`, `max_bounty`, `submission_state`. Unknown values are null. Bounty values retain platform-native currency structures; do not compare currencies without conversion.
+Failures are reported per source and program. A successful empty search differs from an upstream failure. Sorting is by platform, name, then ID. Search matches name, handle, URL or website. The bounty filter excludes unknown values.
 
-Use the exact platform and handle returned by `/collect` for `/scope`. Intigriti uses its program UUID as the handle because URL slugs can repeat across companies. Scope is fetched separately and contains `in_scope` and `out_of_scope` arrays with platform-native fields, instructions and exclusions.
+Program fields: `id`, `platform`, `handle`, `name`, `url`, `website`, `offers_bounties`, `min_bounty`, `max_bounty`, `currency`, `submission_state`. Bounty amounts are numeric with a separate currency when available. Unknown values are null; an unpublished minimum is never inferred from the maximum. Reward tables preserve severity/asset-tier ranges. Bugcrowd ranges use all published in-scope severity tiers; HackerOne ranges use its published bounty table. These are advertised rewards, not historical payouts or guarantees.
+
+Use the exact platform and handle returned by `/collect` for `/details` or `/scope` (an alias returning the same full details). Intigriti uses its program UUID because URL slugs can repeat across companies. `targets` contains `in_scope` and `out_of_scope` arrays with native fields, group instructions, and exclusions. `rules` preserves full policy text/HTML, disclosure terms, safe-harbor information, testing requirements, FAQs, or qualifying vulnerability types where published. Intigriti uses the latest version of every section. HTML is returned as JSON strings, not executed.
+
+If live details fail, available dataset scopes/rewards are retained, `partial` is true, and `field_status` explicitly marks missing rules. Missing policies are never represented as an empty set of permissions. Rules linked from program text remain links; the collector does not recursively crawl external documents.
 
 Each source reports `mode` (`live` or `public_dataset`), `source_url`, `fetched_at`, `source_updated_at` (null if unavailable), and `cached`. Retrieval time is not the time the platform last changed its data. Live pages are fetched sequentially, not atomically; pagination may shift after the cache expires.
 
@@ -63,7 +70,7 @@ Each source reports `mode` (`live` or `public_dataset`), `source_url`, `fetched_
 
 The GitHub Actions workflow tests pushes/PRs and deploys successful `main` builds to the existing `wuhp/bbconnectapi` Space. Manual workflow dispatch is supported. The repository Actions secret **HF_TOKEN** must have write access to that Space. The token is used only by the deployment job; the public app never receives it.
 
-Only `app.py`, `collector.py`, `requirements.txt`, and `README.md` are uploaded. Existing unrelated Space files are retained. Tokens are never printed or placed in Git remote URLs.
+Only `app.py`, `collector.py`, `details.py`, `requirements.txt`, and `README.md` are uploaded. Existing unrelated Space files are retained. Tokens are never printed or placed in Git remote URLs.
 
 ## Local development
 

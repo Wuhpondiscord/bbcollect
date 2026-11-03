@@ -10,7 +10,7 @@ root = Path(__file__).resolve().parents[1]
 api = HfApi(token=os.environ["HF_TOKEN"])
 api.upload_folder(
     repo_id="wuhp/bbconnectapi", repo_type="space", folder_path=str(root),
-    allow_patterns=["app.py", "collector.py", "requirements.txt", "README.md"],
+    allow_patterns=["app.py", "collector.py", "details.py", "requirements.txt", "README.md"],
     commit_message="Deploy bbcollect " + os.environ.get("GITHUB_SHA", "manual"),
 )
 print("Deployed application to https://huggingface.co/spaces/wuhp/bbconnectapi")

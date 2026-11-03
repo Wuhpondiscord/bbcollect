@@ -20,13 +20,13 @@ class CollectorTests(unittest.TestCase):
                 for n, paid in [("Beta", True), ("Alpha", True), ("Unknown", None)]]
         with patch.object(c, "programs", side_effect=lambda p:
                           {"ok": True, "programs": rows + [rows[0]]} if p == "hackerone" else {"ok": False}):
-            r = c.collect(["hackerone", "bugcrowd"], bounty_only=True, limit=1)
+            r = c.collect(["hackerone", "bugcrowd"], bounty_only=True, limit=1, include_details=False)
             self.assertTrue(r["partial"])
             self.assertEqual(r["total"], 2)
             self.assertEqual(r["next_offset"], 1)
             self.assertEqual(r["programs"][0]["name"], "Alpha")
             self.assertNotIn("targets", r["programs"][0])
-            self.assertEqual(c.collect(["hackerone"], search="BETA")["total"], 1)
+            self.assertEqual(c.collect(["hackerone"], search="BETA", include_details=False)["total"], 1)
 
     def test_intigriti_handles_do_not_collide_across_companies(self):
         first = normalize("intigriti", {"company_handle": "one", "handle": "vdp", "id": "uuid-one"})
@@ -66,7 +66,8 @@ class CollectorTests(unittest.TestCase):
         c = Collector()
         nodes = [{"asset_identifier": "*.example.com", "eligible_for_submission": True},
                  {"asset_identifier": "excluded.example.com", "eligible_for_submission": False}]
-        with patch("collector.hackerone_pages", return_value=nodes):
+        with patch("details.live_details", return_value={"ok": True, "targets": {
+            "in_scope": nodes[:1], "out_of_scope": nodes[1:]}}):
             r = c.scope("hackerone", "example")
         self.assertEqual(r["targets"]["out_of_scope"][0]["asset_identifier"], "excluded.example.com")
 

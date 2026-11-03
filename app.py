@@ -7,20 +7,26 @@ import gradio as gr
 from collector import PLATFORMS, collector
 
 
-def collect(platforms, search, bounty_only, limit, offset):
-    """List public programs with filters, pagination and per-source provenance."""
-    return collector.collect(platforms, search, bounty_only, limit, offset)
+def collect(platforms, search, bounty_only, limit, offset, include_details=True):
+    """List programs, including live rewards, scopes and rules by default."""
+    return collector.collect(platforms, search, bounty_only, limit, offset, include_details)
 
 
 def scope(platform, handle):
-    """Fetch public in-scope and out-of-scope assets for a program handle."""
+    """Fetch scopes, rules and rewards for a program (alias of /details)."""
     return collector.scope(platform, handle.strip())
+
+
+def details(platform, handle):
+    """Get live public rewards, scopes, exclusions and full program rules."""
+    return collector.details(platform, handle.strip())
 
 
 def sources():
     """Describe supported sources and cache behavior without crawling upstreams."""
     return {"platforms": list(PLATFORMS), "hackerone": "Public live GraphQL, dataset fallback",
-            "other_platforms": "arkadiyt/bounty-targets-data public snapshots",
+            "other_platforms": "Directory: public dataset; details: live platform public program documents",
+            "collect_default": "Full details, scopes, rules and reward tables; include_details=False for summaries",
             "cache_seconds": 900, "failure_cache_seconds": 60,
             "scope_fields": "Platform-native fields; in_scope and out_of_scope kept separate"}
 
@@ -28,24 +34,28 @@ def sources():
 with gr.Blocks(title="bbconnectapi") as demo:
     gr.Markdown("# bbconnectapi\nPublic bug bounty programs and scope, available as a JSON API. "
                 "HackerOne uses live public data with an explicit dataset fallback. "
-                "Other platforms use public dataset snapshots. Results are cached for 15 minutes.")
+                "All four platforms have live program details: reward tables, scopes and rules. "
+                "Directory feeds use public snapshots outside HackerOne. Results are cached for 15 minutes.")
     with gr.Tab("Programs"):
         platforms = gr.CheckboxGroup(list(PLATFORMS), value=["hackerone"], label="Platforms")
         search = gr.Textbox(label="Search name, handle, URL or website", max_lines=1)
         bounty_only = gr.Checkbox(label="Only programs known to offer bounties", value=False)
+        include_details = gr.Checkbox(label="Include scopes, rules and live reward tables (slower)", value=True)
         with gr.Row():
-            limit = gr.Slider(1, 1000, value=100, step=1, label="Page size")
+            limit = gr.Slider(1, 100, value=10, step=1, label="Page size")
             offset = gr.Number(value=0, precision=0, minimum=0, maximum=100000, label="Offset")
         collect_button = gr.Button("Collect programs", variant="primary")
         programs_json = gr.JSON(label="Programs and source status")
-        collect_button.click(collect, [platforms, search, bounty_only, limit, offset],
+        collect_button.click(collect, [platforms, search, bounty_only, limit, offset, include_details],
                              programs_json, api_name="collect", concurrency_limit=2)
-    with gr.Tab("Program scope"):
+    with gr.Tab("Program details and scope"):
         platform = gr.Dropdown(list(PLATFORMS), value="hackerone", label="Platform")
         handle = gr.Textbox(value="security", label="Program handle (from collect results)")
-        scope_button = gr.Button("Get scope")
-        scope_json = gr.JSON(label="Scope and source status")
+        scope_button = gr.Button("Get rewards, scopes and rules")
+        scope_json = gr.JSON(label="Rewards, targets, rules and source status")
         scope_button.click(scope, [platform, handle], scope_json, api_name="scope", concurrency_limit=2)
+        details_button = gr.Button("Get full details via /details")
+        details_button.click(details, [platform, handle], scope_json, api_name="details", concurrency_limit=2)
     with gr.Tab("API"):
         gr.Markdown('''Use **View API** in the footer for generated client examples.
 
