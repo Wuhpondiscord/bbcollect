@@ -10,86 +10,109 @@ app_file: app.py
 pinned: false
 ---
 
-# bbcollect / bbconnectapi
+# bbcollect · bbconnectapi
 
-A Gradio UI and JSON API for public bug bounty program listings and scope.
+Collect public bug bounty programs, published reward ranges, scopes, exclusions, and program rules from **HackerOne, Bugcrowd, Intigriti, and YesWeHack**.
 
-- Space: https://huggingface.co/spaces/wuhp/bbconnectapi
-- Source: https://github.com/Wuhpondiscord/bbcollect
-- HackerOne: live public GraphQL requests initialized from https://hackerone.com/opportunities/all, with explicit dataset fallback.
-- Bugcrowd, Intigriti, YesWeHack directories: public snapshots from [arkadiyt/bounty-targets-data](https://github.com/arkadiyt/bounty-targets-data).
-- All four platforms: live program details, reward ranges/tables, scopes, exclusions and full program rules.
+**No API key. No account. No Authorization header.** The hosted API is public and supports browser requests with CORS.
 
-This collects the public open-program directory, not every promotion or feature of the Opportunities page. Private programs and authenticated account data are not collected. No platform credentials are required.
+- [Interactive API documentation](https://wuhp-bbconnectapi.hf.space/api/docs) — try requests in your browser
+- [API reference](https://github.com/Wuhpondiscord/bbcollect/blob/main/docs/API.md) — endpoints, parameters, responses, errors, limits
+- [Usage recipes](https://github.com/Wuhpondiscord/bbcollect/blob/main/docs/EXAMPLES.md) — Python, JavaScript, curl, pagination, and exports
+- [Gradio app](https://huggingface.co/spaces/wuhp/bbconnectapi) · [OpenAPI JSON](https://wuhp-bbconnectapi.hf.space/api/openapi.json)
 
-## API usage
+## Quick start
 
-Install `gradio_client`, then:
+Base URL: **`https://wuhp-bbconnectapi.hf.space/api/v1`**
+
+```bash
+curl 'https://wuhp-bbconnectapi.hf.space/api/v1/programs?platforms=hackerone,bugcrowd&limit=10'
+```
+
+```python
+import requests
+
+base = "https://wuhp-bbconnectapi.hf.space/api/v1"
+response = requests.get(f"{base}/programs", params={
+    "platforms": "hackerone,bugcrowd",
+    "search": "", "bounty_only": True, "limit": 10,
+}, timeout=180)
+response.raise_for_status()
+page = response.json()
+for program in page["programs"]:
+    print(program["name"], program["max_bounty"], program["currency"])
+
+# One program's complete live document: rewards, scopes and policies.
+response = requests.get(f"{base}/programs/hackerone/security", timeout=180)
+response.raise_for_status()
+detail = response.json()
+print(detail["targets"]["in_scope"])
+print(detail["targets"]["out_of_scope"])
+print(detail["rules"])
+```
+
+Install the Python example dependency with `pip install requests`. REST responses are ordinary JSON; no event IDs or streaming client are required.
+
+## What can I do?
+
+| Endpoint | Purpose |
+| --- | --- |
+| `GET /programs` | Search multiple platforms, filter by bounty/currency, sort, and paginate |
+| `GET /programs/{platform}/{handle}` | Live bounty tables, scopes, exclusions, and full program rules |
+| `GET /programs/{platform}/{handle}/assets` | Common asset identifiers/types, with native records and all exclusions retained |
+| `POST /programs/batch` | Up to 20 detail lookups in one request |
+| `GET /stats` | Directory counts by platform without crawling individual policies |
+| `GET /sources` | Supported sources, capabilities, and cache settings |
+| `GET /health` | Cheap application readiness check |
+
+Paths above are relative to `/api/v1`. **REST listings return summaries by default.** Add `include_details=true` to include live scopes and rules for every program on the page. Start with `limit=5` or `10`: full policies and large scopes can take much longer than summaries.
+
+## Understand the data
+
+| Platform | Directory | Program details |
+| --- | --- | --- |
+| HackerOne | Public live GraphQL, with dataset fallback | Live public policy, reward table, and paginated scope |
+| Bugcrowd | Public dataset | Live public engagement brief, reward tiers, target groups, rules, safe harbor |
+| Intigriti | Public dataset | Live current versions of assets, reward tables, rules, FAQs, and testing requirements |
+| YesWeHack | Public dataset | Live public rules, reward grids, scopes, exclusions, and vulnerability requirements |
+
+Directory snapshots and fallbacks come from [arkadiyt/bounty-targets-data](https://github.com/arkadiyt/bounty-targets-data). Only public metadata is collected; no target scanning or authenticated/private program data is involved. HackerOne covers the public open-program directory rather than every promotion on its Opportunities page.
+
+- Check `ok`, `partial`, `sources`, `details_source`, and `field_status`. A partial response may retain dataset scopes while live rules are unavailable.
+- `null` means unknown/unpublished/unavailable, not zero. Advertised rewards are not payout guarantees. Currency is separate; amount filters require an explicit currency.
+- Most directory reward/currency fields outside HackerOne come from snapshots. Reward filters run on directory metadata **before** live detail enrichment, so values may differ from a refreshed detail document.
+- Source results are cached in memory for 15 minutes; failures for 60 seconds. `fetched_at` is retrieval time, not the platform's last edit. `source_updated_at` may be unavailable.
+- Always check the linked program's current rules. Asset filters retain exclusions; program rules and group instructions still apply.
+
+## Existing Gradio clients
+
+The Gradio API remains available without a token:
 
 ```python
 from gradio_client import Client
 client = Client("wuhp/bbconnectapi")
-page = client.predict(
-    platforms=["hackerone", "bugcrowd", "intigriti", "yeswehack"],
-    search="", bounty_only=False, limit=10, offset=0,
-    api_name="/collect",
-)
-print(page["programs"])
-# For the next page use page["next_offset"] as offset, unless it is None.
-scope = client.predict(platform="hackerone", handle="security", api_name="/scope")
-print(scope["targets"]["in_scope"])
-print(scope["targets"]["out_of_scope"])
-print(client.predict(api_name="/sources"))
-details = client.predict(platform="bugcrowd", handle="CCData-mbb-og", api_name="/details")
-print(details["min_bounty"], details["max_bounty"], details["rules"])
+page = client.predict(["hackerone"], "", False, 10, 0, api_name="/collect")
+detail = client.predict("hackerone", "security", api_name="/details")
 ```
 
-Raw HTTP uses Gradio's two-step event API, not REST GET routes:
+`/collect` keeps exactly **five** inputs and always includes full details. `/collect_options` adds a sixth `include_details` boolean. `/scope` remains an alias for `/details`; `/sources` takes no inputs. See the [compatibility reference](https://github.com/Wuhpondiscord/bbcollect/blob/main/docs/API.md#gradio-compatibility) for raw HTTP payloads.
+
+## Run your own instance
 
 ```bash
-curl -X POST https://wuhp-bbconnectapi.hf.space/gradio_api/call/collect \
-  -H 'Content-Type: application/json' \
-  -d '{"data":[["hackerone"],"",false,10,0]}'
-# Use the returned event_id:
-curl -N https://wuhp-bbconnectapi.hf.space/gradio_api/call/collect/EVENT_ID
-```
-
-`/collect` accepts exactly five inputs in this order: `platforms`, `search`, `bounty_only`, `limit`, `offset`. It returns `ok`, `partial`, `total` (after filtering), `next_offset`, `sources`, and `programs`. It always includes live details: each program has `targets`, `rules`, `reward_table`, `field_status`, and `details_source`.
-
-Use `/collect_options` for the same five inputs plus a sixth `include_details` boolean. Set it to `False` for fast summary pages. Clients using the six-value payload from the previous version should change their endpoint to `/collect_options`; original five-value `/collect` clients require no changes. Python default arguments do not make Gradio component inputs optional in raw HTTP requests.
-
-Full-detail pages support 1–100 programs; summary pages support 1–1000. `offset` is 0–100000. Four workers fetch details with a shared 15-minute cache, so large first requests take longer.
-
-Failures are reported per source and program. A successful empty search differs from an upstream failure. Sorting is by platform, name, then ID. Search matches name, handle, URL or website. The bounty filter excludes unknown values.
-
-Program fields: `id`, `platform`, `handle`, `name`, `url`, `website`, `offers_bounties`, `min_bounty`, `max_bounty`, `currency`, `submission_state`. Bounty amounts are numeric with a separate currency when available. Unknown values are null; an unpublished minimum is never inferred from the maximum. Reward tables preserve severity/asset-tier ranges. Bugcrowd ranges use all published in-scope severity tiers; HackerOne ranges use its published bounty table. These are advertised rewards, not historical payouts or guarantees.
-
-Use the exact platform and handle returned by `/collect` for `/details` or `/scope` (an alias returning the same full details). Intigriti uses its program UUID because URL slugs can repeat across companies. `targets` contains `in_scope` and `out_of_scope` arrays with native fields, group instructions, and exclusions. `rules` preserves full policy text/HTML, disclosure terms, safe-harbor information, testing requirements, FAQs, or qualifying vulnerability types where published. Intigriti uses the latest version of every section. HTML is returned as JSON strings, not executed.
-
-If live details fail, available dataset scopes/rewards are retained, `partial` is true, and `field_status` explicitly marks missing rules. Missing policies are never represented as an empty set of permissions. Rules linked from program text remain links; the collector does not recursively crawl external documents.
-
-Each source reports `mode` (`live` or `public_dataset`), `source_url`, `fetched_at`, `source_updated_at` (null if unavailable), and `cached`. Retrieval time is not the time the platform last changed its data. Live pages are fetched sequentially, not atomically; pagination may shift after the cache expires.
-
-## Deployment
-
-The GitHub Actions workflow tests pushes/PRs and deploys successful `main` builds to the existing `wuhp/bbconnectapi` Space. Manual workflow dispatch is supported. The repository Actions secret **HF_TOKEN** must have write access to that Space. The token is used only by the deployment job; the public app never receives it.
-
-Only `app.py`, `collector.py`, `details.py`, `requirements.txt`, and `README.md` are uploaded. Existing unrelated Space files are retained. Tokens are never printed or placed in Git remote URLs.
-
-## Local development
-
-```bash
+git clone https://github.com/Wuhpondiscord/bbcollect.git
+cd bbcollect
 python -m venv .venv
-# Activate the environment for your shell, then:
+# Activate .venv for your shell, then:
 pip install -r requirements.txt
-python -m unittest discover -s tests -v
 python app.py
 ```
 
-Open http://localhost:7860. Public Spaces expose their Gradio API publicly; use a private Space and an authenticated client for restricted access. Free Spaces may sleep and lose their cache. Collection runs on demand with a shared 15-minute memory cache, or 60 seconds for failures. There is no scheduled crawler or persistent database.
+Open `http://localhost:7860`, `http://localhost:7860/api/docs`, or `http://localhost:7860/api/v1/health`. `PORT` overrides port 7860. No runtime secrets are required. [Deployment guide](https://github.com/Wuhpondiscord/bbcollect/blob/main/docs/DEPLOYMENT.md).
 
-Check current program rules and scope at the linked platform before testing. Snapshots can lag behind changes and do not grant permission to test assets.
+The hosted Space may sleep or restart; there is no uptime guarantee or persistent database. Busy REST collection requests receive `429` and a `Retry-After` header. Prefer summary pages and batch only the details you need. Cache expiration can shift offset pagination; deduplicate program IDs during long crawls.
 
-## Data attribution
+## Contribute
 
-Additional feeds and the HackerOne fallback use public data maintained by [arkadiyt/bounty-targets-data](https://github.com/arkadiyt/bounty-targets-data). The upstream Ruby collector is not bundled.
+Run `python -m unittest discover -s tests -v` before submitting changes. Tests cover the REST contract, filters, normalization, partial failures, and the original five-input Gradio request. New providers should preserve scopes, exclusions, native policies, and source provenance. See [CONTRIBUTING.md](https://github.com/Wuhpondiscord/bbcollect/blob/main/CONTRIBUTING.md) and [CHANGELOG.md](https://github.com/Wuhpondiscord/bbcollect/blob/main/CHANGELOG.md).
+

@@ -5,6 +5,7 @@ os.environ.setdefault("GRADIO_ANALYTICS_ENABLED", "False")
 
 import gradio as gr
 from collector import PLATFORMS, collector
+from api import create_api
 
 
 def collect(platforms, search, bounty_only, limit, offset):
@@ -38,7 +39,9 @@ def sources():
 
 
 with gr.Blocks(title="bbconnectapi") as demo:
-    gr.Markdown("# bbconnectapi\nPublic bug bounty programs and scope, available as a JSON API. "
+    gr.Markdown("# bbconnectapi\nPublic bug bounty programs and scope. **No API key or login required.** "
+                "[Interactive REST docs](/api/docs) · [OpenAPI schema](/api/openapi.json) · "
+                "[GitHub guide](https://github.com/Wuhpondiscord/bbcollect)\n\n"
                 "HackerOne uses live public data with an explicit dataset fallback. "
                 "All four platforms have live program details: reward tables, scopes and rules. "
                 "Directory feeds use public snapshots outside HackerOne. Results are cached for 15 minutes.")
@@ -68,7 +71,28 @@ with gr.Blocks(title="bbconnectapi") as demo:
         details_button = gr.Button("Get full details via /details")
         details_button.click(details, [platform, handle], scope_json, api_name="details", concurrency_limit=2)
     with gr.Tab("API"):
-        gr.Markdown('''Use **View API** in the footer for generated client examples.
+        gr.Markdown('''### REST API — direct JSON, no key
+
+Base URL: `https://wuhp-bbconnectapi.hf.space/api/v1`
+
+```python
+import requests
+base = "https://wuhp-bbconnectapi.hf.space/api/v1"
+page = requests.get(f"{base}/programs", params={
+    "platforms": "hackerone,bugcrowd", "search": "", "limit": 10
+}, timeout=120).json()
+detail = requests.get(f"{base}/programs/hackerone/security", timeout=120).json()
+```
+
+Summaries are the REST default. Add `include_details=true` for full policies and scopes.
+Use `/programs/{platform}/{handle}/assets` for normalized assets and exclusions,
+`POST /programs/batch` for up to 20 detail lookups, and `/stats`, `/sources`, `/health` for metadata.
+
+[Try requests in the interactive docs](/api/docs) · [Full API reference on GitHub](https://github.com/Wuhpondiscord/bbcollect/blob/main/docs/API.md)
+
+### Existing Gradio API
+
+Use **View API** in the footer for generated client examples. `/collect` keeps its five-input contract.
 
 ```python
 from gradio_client import Client
@@ -86,6 +110,9 @@ Scope is a snapshot: check the linked program's current rules and exclusions bef
 
 demo.queue(max_size=32, default_concurrency_limit=2)
 
+# Register REST routes before the root Gradio mount. Existing Gradio URLs stay unchanged.
+app = gr.mount_gradio_app(create_api(), demo, path="/", show_error=False, ssr_mode=False)
+
 if __name__ == "__main__":
-    demo.launch(server_name="0.0.0.0", server_port=int(os.getenv("PORT", "7860")),
-                show_error=False)
+    import uvicorn
+    uvicorn.run(app, host="0.0.0.0", port=int(os.getenv("PORT", "7860")))

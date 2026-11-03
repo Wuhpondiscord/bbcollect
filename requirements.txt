@@ -1,2 +1,4 @@
 gradio==6.31.0
 requests==2.32.5
+fastapi==0.162.0
+uvicorn==0.54.0
