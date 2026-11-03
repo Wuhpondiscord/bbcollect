@@ -124,6 +124,9 @@ def bounty_value(value):
 def normalize(platform, row):
     url = row.get("url") or ""
     handle = str(row.get("handle") or row.get("id") or urlsplit(url).path.rstrip("/").split("/")[-1])
+    # Intigriti handles are unique within a company, not across the platform.
+    if platform == "intigriti":
+        handle = str(row.get("id") or f"{row.get('company_handle', '')}--{handle}")
     if platform == "yeswehack" and not url:
         url = f"https://yeswehack.com/programs/{handle}"
     maximum = bounty_value(row.get("max_bounty", row.get("max_payout")))

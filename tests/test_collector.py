@@ -28,6 +28,11 @@ class CollectorTests(unittest.TestCase):
             self.assertNotIn("targets", r["programs"][0])
             self.assertEqual(c.collect(["hackerone"], search="BETA")["total"], 1)
 
+    def test_intigriti_handles_do_not_collide_across_companies(self):
+        first = normalize("intigriti", {"company_handle": "one", "handle": "vdp", "id": "uuid-one"})
+        second = normalize("intigriti", {"company_handle": "two", "handle": "vdp", "id": "uuid-two"})
+        self.assertNotEqual(first["id"], second["id"])
+
     def test_empty_success_and_failure(self):
         c = Collector()
         with patch.object(c, "programs", return_value={"ok": True, "programs": []}):

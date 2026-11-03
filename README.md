@@ -55,7 +55,7 @@ curl -N https://wuhp-bbconnectapi.hf.space/gradio_api/call/collect/EVENT_ID
 
 Program fields: `id`, `platform`, `handle`, `name`, `url`, `website`, `offers_bounties`, `min_bounty`, `max_bounty`, `submission_state`. Unknown values are null. Bounty values retain platform-native currency structures; do not compare currencies without conversion.
 
-Use the exact platform and handle returned by `/collect` for `/scope`. Scope is fetched separately and contains `in_scope` and `out_of_scope` arrays with platform-native fields, instructions and exclusions.
+Use the exact platform and handle returned by `/collect` for `/scope`. Intigriti uses its program UUID as the handle because URL slugs can repeat across companies. Scope is fetched separately and contains `in_scope` and `out_of_scope` arrays with platform-native fields, instructions and exclusions.
 
 Each source reports `mode` (`live` or `public_dataset`), `source_url`, `fetched_at`, `source_updated_at` (null if unavailable), and `cached`. Retrieval time is not the time the platform last changed its data. Live pages are fetched sequentially, not atomically; pagination may shift after the cache expires.
 
