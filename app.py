@@ -7,8 +7,13 @@ import gradio as gr
 from collector import PLATFORMS, collector
 
 
-def collect(platforms, search, bounty_only, limit, offset, include_details=True):
-    """List programs, including live rewards, scopes and rules by default."""
+def collect(platforms, search, bounty_only, limit, offset):
+    """Stable five-input API; always include live rewards, scopes and rules."""
+    return collector.collect(platforms, search, bounty_only, limit, offset, True)
+
+
+def collect_options(platforms, search, bounty_only, limit, offset, include_details=True):
+    """Collect programs with an explicit full-details/summary toggle."""
     return collector.collect(platforms, search, bounty_only, limit, offset, include_details)
 
 
@@ -26,7 +31,8 @@ def sources():
     """Describe supported sources and cache behavior without crawling upstreams."""
     return {"platforms": list(PLATFORMS), "hackerone": "Public live GraphQL, dataset fallback",
             "other_platforms": "Directory: public dataset; details: live platform public program documents",
-            "collect_default": "Full details, scopes, rules and reward tables; include_details=False for summaries",
+            "collect_default": "Five inputs; full details, scopes, rules and reward tables",
+            "collect_options": "Six inputs; include_details=False for summaries",
             "cache_seconds": 900, "failure_cache_seconds": 60,
             "scope_fields": "Platform-native fields; in_scope and out_of_scope kept separate"}
 
@@ -46,7 +52,12 @@ with gr.Blocks(title="bbconnectapi") as demo:
             offset = gr.Number(value=0, precision=0, minimum=0, maximum=100000, label="Offset")
         collect_button = gr.Button("Collect programs", variant="primary")
         programs_json = gr.JSON(label="Programs and source status")
-        collect_button.click(collect, [platforms, search, bounty_only, limit, offset, include_details],
+        collect_button.click(collect_options, [platforms, search, bounty_only, limit, offset, include_details],
+                             programs_json, api_name="collect_options", concurrency_limit=2)
+        # Preserve the original wire format: Gradio validates component counts
+        # before Python defaults apply, so /collect must have exactly five inputs.
+        legacy_collect = gr.Button(visible=False)
+        legacy_collect.click(collect, [platforms, search, bounty_only, limit, offset],
                              programs_json, api_name="collect", concurrency_limit=2)
     with gr.Tab("Program details and scope"):
         platform = gr.Dropdown(list(PLATFORMS), value="hackerone", label="Platform")

@@ -31,7 +31,7 @@ from gradio_client import Client
 client = Client("wuhp/bbconnectapi")
 page = client.predict(
     platforms=["hackerone", "bugcrowd", "intigriti", "yeswehack"],
-    search="", bounty_only=False, limit=10, offset=0, include_details=True,
+    search="", bounty_only=False, limit=10, offset=0,
     api_name="/collect",
 )
 print(page["programs"])
@@ -49,12 +49,16 @@ Raw HTTP uses Gradio's two-step event API, not REST GET routes:
 ```bash
 curl -X POST https://wuhp-bbconnectapi.hf.space/gradio_api/call/collect \
   -H 'Content-Type: application/json' \
-  -d '{"data":[["hackerone"],"",false,10,0,true]}'
+  -d '{"data":[["hackerone"],"",false,10,0]}'
 # Use the returned event_id:
 curl -N https://wuhp-bbconnectapi.hf.space/gradio_api/call/collect/EVENT_ID
 ```
 
-`/collect` returns `ok`, `partial`, `total` (after filtering), `next_offset`, `sources`, and `programs`. It includes live details by default: each program has `targets`, `rules`, `reward_table`, `field_status`, and `details_source`. Set `include_details=False` for fast summary pages. Full-detail pages support 1–100 programs; summary pages support 1–1000. `offset` is 0–100000. Four workers fetch details with a shared 15-minute cache, so large first requests take longer.
+`/collect` accepts exactly five inputs in this order: `platforms`, `search`, `bounty_only`, `limit`, `offset`. It returns `ok`, `partial`, `total` (after filtering), `next_offset`, `sources`, and `programs`. It always includes live details: each program has `targets`, `rules`, `reward_table`, `field_status`, and `details_source`.
+
+Use `/collect_options` for the same five inputs plus a sixth `include_details` boolean. Set it to `False` for fast summary pages. Clients using the six-value payload from the previous version should change their endpoint to `/collect_options`; original five-value `/collect` clients require no changes. Python default arguments do not make Gradio component inputs optional in raw HTTP requests.
+
+Full-detail pages support 1–100 programs; summary pages support 1–1000. `offset` is 0–100000. Four workers fetch details with a shared 15-minute cache, so large first requests take longer.
 
 Failures are reported per source and program. A successful empty search differs from an upstream failure. Sorting is by platform, name, then ID. Search matches name, handle, URL or website. The bounty filter excludes unknown values.
 
